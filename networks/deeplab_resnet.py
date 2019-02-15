@@ -4,6 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
+from .transformers import *
+from .DULR_layer import *
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -214,6 +217,8 @@ class DeepLabv3_plus(nn.Module):
                                              nn.ReLU())
 
         self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
+        #self.conv1 = nn.Conv2d(1536, 256, 1, bias=False)
+        #self.conv1 = nn.Conv2d(1024, 256, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(256)
 
         # adopt [1x1, 48] for channel reduction.
@@ -227,21 +232,41 @@ class DeepLabv3_plus(nn.Module):
                                        nn.BatchNorm2d(256),
                                        nn.ReLU(),
                                        nn.Conv2d(256, n_classes, kernel_size=1, stride=1))
+        #self.DULR = nn.Sequential(
+        #    convDU(in_out_channels=256, kernel_size=(1, 9)),
+        #    convLR(in_out_channels=256, kernel_size=(9, 1))
+        #)
+                                             
+        #self.transformer_c = transformer(8,1200,type='channel')
+        #self.trans = self_transformer(8,256)
+        self.trans = nn.Sequential(#self_transformer3(),
+                                   nn.Conv2d(2048, 256, 1, bias=False),
+                                   nn.BatchNorm2d(256),
+                                   nn.ReLU(),
+                                   #self_transformer(1,256)
+                                   self_transformer5()
+                                   )
+        initialize_weights(self.trans)                                
 
     def forward(self, input):
         x, low_level_features = self.resnet_features(input)
+        
         x1 = self.aspp1(x)
         x2 = self.aspp2(x)
         x3 = self.aspp3(x)
         x4 = self.aspp4(x)
-        x5 = self.global_avg_pool(x)
-        x5 = F.upsample(x5, size=x4.size()[2:], mode='bilinear', align_corners=True)
-
+        #x5 = self.global_avg_pool(x)
+        #x5 = F.upsample(x5, size=x4.size()[2:], mode='bilinear', align_corners=True)
+        x5 = self.trans(x)
+        #x6 = self.trans(x)
+        #x = torch.cat((x1, x2, x3, x4, x5, x6), dim=1)
         x = torch.cat((x1, x2, x3, x4, x5), dim=1)
-
+        #x = torch.cat((x1, x2, x3, x4), dim=1)
+        
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+             
         x = F.upsample(x, size=(int(math.ceil(input.size()[-2]/4)),
                                 int(math.ceil(input.size()[-1]/4))), mode='bilinear', align_corners=True)
 

@@ -1,5 +1,5 @@
 import os
-
+from PIL import Image
 import torch
 import random
 import numpy as np
@@ -52,7 +52,55 @@ def get_pascal_labels():
                        [0, 64, 0], [128, 64, 0], [0, 192, 0], [128, 192, 0],
                        [0, 64, 128]])
 
-
+def get_rm_labels():
+    label_colours = [
+        (0,0,0),#other
+        (128, 64, 128),
+        (244, 35, 232),
+        (70, 70, 70),
+        (102, 102, 156),
+        (190, 153, 153),
+        (153, 153, 153),
+        (250, 170, 30),
+        (220, 220, 0),
+        (107, 142, 35),
+        (152, 251, 152),
+        (70, 130, 180),
+        (220, 20, 60),
+        (255, 0, 0),
+        (0, 0, 142),
+        (0, 0, 70),
+        (0, 60, 100),
+        (0, 80, 100),
+        (0, 0, 230),
+        (119, 11, 32)
+    ]
+    label_colours = [
+        (0,0,0),#other
+        (128, 64, 128),
+        (190, 153, 153),
+        (250, 170, 30),
+        #(70, 130, 180),
+        (255, 0, 0),
+        (0, 80, 100),
+        (0, 0, 230),
+    ]
+    list_label_colours = []
+    for l in label_colours:
+        list_label_colours.extend(l)
+    return list_label_colours
+    
+def colorize_mask(mask,dataset):
+    if dataset == 'roadmark':
+        list_label_colours = get_rm_labels()
+    else:
+        raise NotImplementedError
+    # mask: numpy array of the mask
+    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
+    new_mask.putpalette(list_label_colours)
+    new_mask = new_mask.convert('RGB')
+    return np.array(new_mask)
+    
 def encode_segmap(mask):
     """Encode segmentation label images as pascal classes
     Args:
@@ -73,7 +121,10 @@ def encode_segmap(mask):
 def decode_seg_map_sequence(label_masks, dataset='pascal'):
     rgb_masks = []
     for label_mask in label_masks:
-        rgb_mask = decode_segmap(label_mask, dataset)
+        if dataset == 'roadmark':
+            rgb_mask = colorize_mask(label_mask, dataset)
+        else:
+            rgb_mask = decode_segmap(label_mask, dataset)
         rgb_masks.append(rgb_mask)
     rgb_masks = torch.from_numpy(np.array(rgb_masks).transpose([0, 3, 1, 2]))
     return rgb_masks
